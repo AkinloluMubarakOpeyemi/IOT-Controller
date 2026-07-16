@@ -7,7 +7,7 @@ function AlertsPanel({ activeAlerts = [] }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-slate-950 dark:text-white">Alerts & Protection</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Threshold and connectivity events.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Live Firebase threshold and connection checks.</p>
         </div>
         <div className="grid h-10 w-10 place-items-center rounded-lg bg-amber-500/10 text-amber-600">
           <FaBell />
@@ -31,9 +31,10 @@ function AlertsPanel({ activeAlerts = [] }) {
               </div>
             ))
           ) : (
-            <p className="rounded-lg bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">
-              All protection checks are normal.
-            </p>
+            <div className="rounded-lg bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">
+              <p className="font-semibold">All protection checks are normal.</p>
+              <p className="mt-1 text-xs">Voltage, current, power, device status, and Wi-Fi are within the saved Firebase limits.</p>
+            </div>
           )}
         </div>
       </div>

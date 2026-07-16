@@ -237,6 +237,15 @@ function ControlPanel({ relayState, timer, schedule, onRelayChange, onTimerChang
         <div className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
           <FaClock /> Scheduled ON/OFF
         </div>
+        <div className="mb-4 rounded-lg bg-slate-100 p-3 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          {scheduleForm.enabled ? (
+            <span>
+              Firebase schedule active: ON {scheduleForm.onTime || '--:--'} / OFF {scheduleForm.offTime || '--:--'}
+            </span>
+          ) : (
+            <span>Schedule is disabled in Firebase.</span>
+          )}
+        </div>
         <div className="grid gap-3 md:grid-cols-2">
           <label>
             <span className="mb-1.5 block text-xs font-semibold text-slate-500">ON time</span>
@@ -275,8 +284,7 @@ function ControlPanel({ relayState, timer, schedule, onRelayChange, onTimerChang
           </button>
         </div>
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-          Saved as <code>deviceControl.schedule</code>. Keep the dashboard open, or add the same schedule
-          check to the ESP32 firmware for standalone switching.
+          Saved to Firebase at <code>control.schedule</code> for the ESP32 firmware and dashboard to read.
         </p>
       </div>
     </div>

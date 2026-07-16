@@ -54,10 +54,10 @@ function SidebarContent({ onClose }) {
       <NavItems onNavigate={onClose} />
       <div className="mt-auto rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-4">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300">
-          Hardware
+          Firebase Paths
         </p>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          ESP32 with ACS712 current sensing, ZMPT101B voltage sensing, and relay control.
+          Readings from <code>sensor</code>, commands to <code>control</code>, history in <code>logs</code>.
         </p>
       </div>
     </div>

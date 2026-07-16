@@ -14,17 +14,24 @@ function HistoryReport({ title, data }) {
     <div className="panel p-5">
       <h2 className="text-lg font-bold text-slate-950 dark:text-white">{title}</h2>
       <div className="mt-4 h-72">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.25)" />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-            <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
-            <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #cbd5e1' }} />
-            <Bar dataKey="energy" fill="#06b6d4" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {data.length ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.25)" />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
+              <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #cbd5e1' }} />
+              <Bar dataKey="energy" fill="#06b6d4" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="grid h-full place-items-center rounded-lg border border-dashed border-slate-300 text-sm text-slate-500 dark:border-slate-700">
+            No Firebase history for this period
+          </div>
+        )}
       </div>
-      <div className="mt-5 overflow-auto">
+      {data.length ? (
+        <div className="mt-5 overflow-auto">
         <table className="w-full min-w-[520px] text-left text-sm">
           <thead className="text-xs uppercase text-slate-500">
             <tr>
@@ -46,6 +53,7 @@ function HistoryReport({ title, data }) {
           </tbody>
         </table>
       </div>
+      ) : null}
     </div>
   );
 }

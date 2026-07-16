@@ -104,6 +104,30 @@ function normalizeSensorData(value = {}) {
   };
 }
 
+function timestampFromLogItem(item = {}) {
+  if (item.timestamp) {
+    return item.timestamp;
+  }
+
+  if (item.isoTime) {
+    return item.isoTime;
+  }
+
+  if (typeof item.id === 'string' && item.id.includes('T')) {
+    const repaired = item.id.replace(/-(\d{3})Z$/, '.$1Z');
+    if (Number.isFinite(new Date(repaired).getTime())) {
+      return repaired;
+    }
+  }
+
+  const numericId = toNumber(item.id, NaN);
+  if (Number.isFinite(numericId)) {
+    return new Date(numericId < 10000000000 ? numericId * 1000 : numericId).toISOString();
+  }
+
+  return new Date().toISOString();
+}
+
 function normalizeSettings(value = {}) {
   return {
     voltageLimit: toNumber(value.voltageLimit, defaultSettings.voltageLimit),
@@ -159,17 +183,18 @@ function pointFromSensor(sensorData) {
     power: sensorData.power,
     energy: sensorData.energy,
     cost: sensorData.cost,
+    dateKey: hasValidDate ? date.toLocaleDateString('en-CA') : '',
   };
 }
 
 function normalizeDeviceStatus(value = {}) {
   const lastSeen = value.lastSeen || value.last_updated || null;
-  const statusOnline = value.status ? value.status === 'NORMAL' : Boolean(lastSeen);
-  const wifiOnline = value.status ? value.status === 'NORMAL' : value.wifi_rssi !== undefined;
+  const statusOnline = value.online ?? (value.status ? value.status === 'NORMAL' : true);
+  const wifiOnline = value.wifiConnected ?? (value.wifi_rssi !== undefined ? toNumber(value.wifi_rssi, -100) > -90 : statusOnline);
 
   return {
-    online: value.online ?? statusOnline,
-    wifiConnected: value.wifiConnected ?? wifiOnline,
+    online: statusOnline,
+    wifiConnected: wifiOnline,
     lastSeen,
     status: value.status || '',
     wifiRssi: value.wifi_rssi ?? value.wifiRssi ?? null,
@@ -284,7 +309,7 @@ export function useFirebaseData() {
         ref(database, paths.history),
         (snapshot) => {
           const rows = normalizeObjectList(snapshot.val())
-            .map((item) => pointFromSensor(normalizeSensorData({ ...item, timestamp: item.timestamp || item.time || item.id })))
+            .map((item) => pointFromSensor(normalizeSensorData({ ...item, timestamp: timestampFromLogItem(item) })))
             .reverse();
           setPersistedHistory(rows.slice(-500));
         },
@@ -311,6 +336,7 @@ export function useFirebaseData() {
         enabled: Boolean(schedule.enabled),
         onTime: schedule.onTime || '',
         offTime: schedule.offTime || '',
+        updatedAt: new Date().toISOString(),
       }),
     [],
   );

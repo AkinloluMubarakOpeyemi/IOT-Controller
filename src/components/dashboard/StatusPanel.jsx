@@ -30,6 +30,14 @@ function StatusPanel({ deviceStatus, timestamp }) {
         <StatusPill active={deviceStatus.wifiConnected} label="Wi-Fi Status" icon={FaWifi} />
         <StatusPill active={deviceStatus.online} label="Device Status" icon={FaMicrochip} />
       </div>
+      <div className="mt-4 grid gap-3 rounded-lg bg-slate-100 p-3 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        <p>
+          Firebase status: <span className="font-semibold">{deviceStatus.status || 'NORMAL'}</span>
+        </p>
+        <p>
+          Wi-Fi RSSI: <span className="font-semibold">{deviceStatus.wifiRssi ?? 'Waiting'} dBm</span>
+        </p>
+      </div>
       <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
         Last sensor update: <span className="font-semibold">{formatDateTime(timestamp)}</span>
       </p>
