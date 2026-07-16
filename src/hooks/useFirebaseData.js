@@ -36,6 +36,10 @@ const defaultSettings = {
   wifiPassword: '',
 };
 
+function reportMessage(error, fallback = 'Firebase operation failed.') {
+  return error?.message || fallback;
+}
+
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -94,6 +98,11 @@ function normalizeObjectList(value = {}) {
     .sort((a, b) => new Date(b.time || b.timestamp || 0) - new Date(a.time || a.timestamp || 0));
 }
 
+function historyKeyFromSensor(sensorData) {
+  const timestamp = sensorData.timestamp || new Date().toISOString();
+  return timestamp.replace(/[.#$\/[\]]/g, '-');
+}
+
 function pointFromSensor(sensorData) {
   const timestamp = sensorData.timestamp || new Date().toISOString();
   return {
@@ -122,6 +131,7 @@ export function useFirebaseData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const lastAlertKeyRef = useRef('');
+  const lastHistoryKeyRef = useRef('');
   const loadedPathsRef = useRef({
     sensorData: false,
     deviceStatus: false,
@@ -129,11 +139,25 @@ export function useFirebaseData() {
   });
 
   useEffect(() => {
+    if (!database) {
+      setError('Firebase Realtime Database is not initialized.');
+      setLoading(false);
+      return undefined;
+    }
+
     const unsubscribers = [
       onValue(
         ref(database, paths.sensorData),
         (snapshot) => {
+          if (!snapshot.exists()) {
+            loadedPathsRef.current.sensorData = true;
+            setLoading(false);
+            return;
+          }
+
           const nextSensorData = normalizeSensorData(snapshot.val() || {});
+          const historyKey = historyKeyFromSensor(nextSensorData);
+
           loadedPathsRef.current.sensorData = true;
           setSensorData((current) => (shallowEqual(current, nextSensorData) ? current : nextSensorData));
           setLiveHistory((current) => {
@@ -143,40 +167,87 @@ export function useFirebaseData() {
 
             return [...current.slice(-79), pointFromSensor(nextSensorData)];
           });
+
+          if (lastHistoryKeyRef.current !== historyKey) {
+            lastHistoryKeyRef.current = historyKey;
+            set(ref(database, `${paths.history}/${historyKey}`), pointFromSensor(nextSensorData)).catch((writeError) => {
+              setError(reportMessage(writeError, 'Unable to store sensor reading history.'));
+            });
+          }
+
           setLoading(false);
           setError('');
         },
-        (listenerError) => setError(listenerError.message),
+        (listenerError) => {
+          setLoading(false);
+          setError(reportMessage(listenerError, 'Unable to read sensor data.'));
+        },
       ),
-      onValue(ref(database, paths.deviceControl), (snapshot) => {
-        const nextDeviceControl = normalizeDeviceControl(snapshot.val() || defaultDeviceControl);
-        setDeviceControl((current) => (deviceControlEqual(current, nextDeviceControl) ? current : nextDeviceControl));
-      }),
-      onValue(ref(database, paths.deviceStatus), (snapshot) => {
-        const nextDeviceStatus = { ...defaultDeviceStatus, ...(snapshot.val() || {}) };
-        loadedPathsRef.current.deviceStatus = true;
-        setDeviceStatus((current) => (shallowEqual(current, nextDeviceStatus) ? current : nextDeviceStatus));
-      }),
-      onValue(ref(database, paths.settings), (snapshot) => {
-        const nextSettings = { ...defaultSettings, ...(snapshot.val() || {}) };
-        loadedPathsRef.current.settings = true;
-        setSettings((current) => (shallowEqual(current, nextSettings) ? current : nextSettings));
-      }),
-      onValue(ref(database, paths.alerts), (snapshot) => {
-        setAlerts(normalizeObjectList(snapshot.val()).slice(0, 50));
-      }),
-      onValue(ref(database, paths.history), (snapshot) => {
-        const rows = normalizeObjectList(snapshot.val())
-          .map((item) => pointFromSensor(normalizeSensorData(item)))
-          .reverse();
-        setPersistedHistory(rows.slice(-500));
-      }),
+      onValue(
+        ref(database, paths.deviceControl),
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            set(ref(database, paths.deviceControl), defaultDeviceControl).catch((writeError) => {
+              setError(reportMessage(writeError, 'Unable to create default device control data.'));
+            });
+          }
+
+          const nextDeviceControl = normalizeDeviceControl(snapshot.val() || defaultDeviceControl);
+          setDeviceControl((current) => (deviceControlEqual(current, nextDeviceControl) ? current : nextDeviceControl));
+        },
+        (listenerError) => setError(reportMessage(listenerError, 'Unable to read device control data.')),
+      ),
+      onValue(
+        ref(database, paths.deviceStatus),
+        (snapshot) => {
+          const nextDeviceStatus = { ...defaultDeviceStatus, ...(snapshot.val() || {}) };
+          loadedPathsRef.current.deviceStatus = true;
+          setDeviceStatus((current) => (shallowEqual(current, nextDeviceStatus) ? current : nextDeviceStatus));
+        },
+        (listenerError) => setError(reportMessage(listenerError, 'Unable to read device status data.')),
+      ),
+      onValue(
+        ref(database, paths.settings),
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            set(ref(database, paths.settings), defaultSettings).catch((writeError) => {
+              setError(reportMessage(writeError, 'Unable to create default settings.'));
+            });
+          }
+
+          const nextSettings = { ...defaultSettings, ...(snapshot.val() || {}) };
+          loadedPathsRef.current.settings = true;
+          setSettings((current) => (shallowEqual(current, nextSettings) ? current : nextSettings));
+        },
+        (listenerError) => setError(reportMessage(listenerError, 'Unable to read settings data.')),
+      ),
+      onValue(
+        ref(database, paths.alerts),
+        (snapshot) => {
+          setAlerts(normalizeObjectList(snapshot.val()).slice(0, 50));
+        },
+        (listenerError) => setError(reportMessage(listenerError, 'Unable to read alerts.')),
+      ),
+      onValue(
+        ref(database, paths.history),
+        (snapshot) => {
+          const rows = normalizeObjectList(snapshot.val())
+            .map((item) => pointFromSensor(normalizeSensorData(item)))
+            .reverse();
+          setPersistedHistory(rows.slice(-500));
+        },
+        (listenerError) => setError(reportMessage(listenerError, 'Unable to read history.')),
+      ),
     ];
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, []);
 
   const addAlert = useCallback(async (message, severity = 'warning') => {
+    if (!database) {
+      throw new Error('Firebase Realtime Database is not initialized.');
+    }
+
     const time = new Date().toISOString();
     const key = `${message}-${severity}-${time.slice(0, 16)}`;
 
