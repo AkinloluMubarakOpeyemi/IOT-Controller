@@ -141,6 +141,54 @@ function DashboardPage() {
     ],
   );
 
+  const activeAlerts = useMemo(
+    () =>
+      [
+        sensorData.voltage > settings.voltageLimit && {
+          id: 'active-voltage',
+          message: `Voltage is above ${settings.voltageLimit} V`,
+          severity: 'critical',
+          time: sensorData.timestamp,
+        },
+        sensorData.current > settings.currentLimit && {
+          id: 'active-current',
+          message: `Current is above ${settings.currentLimit} A`,
+          severity: 'critical',
+          time: sensorData.timestamp,
+        },
+        sensorData.power > settings.powerLimit && {
+          id: 'active-power',
+          message: `Power is above ${settings.powerLimit} W`,
+          severity: 'critical',
+          time: sensorData.timestamp,
+        },
+        !deviceStatus.online && {
+          id: 'active-device-offline',
+          message: 'Device is offline',
+          severity: 'warning',
+          time: deviceStatus.lastSeen || sensorData.timestamp,
+        },
+        !deviceStatus.wifiConnected && {
+          id: 'active-wifi-disconnected',
+          message: 'Wi-Fi disconnected',
+          severity: 'warning',
+          time: deviceStatus.lastSeen || sensorData.timestamp,
+        },
+      ].filter(Boolean),
+    [
+      deviceStatus.lastSeen,
+      deviceStatus.online,
+      deviceStatus.wifiConnected,
+      sensorData.current,
+      sensorData.power,
+      sensorData.timestamp,
+      sensorData.voltage,
+      settings.currentLimit,
+      settings.powerLimit,
+      settings.voltageLimit,
+    ],
+  );
+
   const headerActions = useMemo(
     () => (
       <div className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
@@ -188,7 +236,7 @@ function DashboardPage() {
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <CostPanel costs={costs} costPerKWh={settings.costPerKWh} />
-        <AlertsPanel alerts={alerts} onAcknowledge={handleAcknowledgeAlert} />
+        <AlertsPanel alerts={alerts} activeAlerts={activeAlerts} onAcknowledge={handleAcknowledgeAlert} />
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-2">

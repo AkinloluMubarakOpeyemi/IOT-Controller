@@ -1,7 +1,11 @@
 import { FaBell, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { formatDateTime } from '../../utils/formatters';
 
-function AlertsPanel({ alerts, onAcknowledge }) {
+function AlertsPanel({ alerts, activeAlerts = [], onAcknowledge }) {
+  const historicalAlerts = alerts.filter(
+    (alert) => !activeAlerts.some((activeAlert) => activeAlert.message === alert.message),
+  );
+
   return (
     <div className="panel p-5">
       <div className="flex items-center justify-between">
@@ -13,9 +17,34 @@ function AlertsPanel({ alerts, onAcknowledge }) {
           <FaBell />
         </div>
       </div>
-      <div className="mt-4 max-h-80 space-y-3 overflow-auto pr-1">
-        {alerts.length ? (
-          alerts.map((alert) => (
+      <div className="mt-4 max-h-80 space-y-4 overflow-auto pr-1">
+        <div className="space-y-3">
+          {activeAlerts.length ? (
+            activeAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className="rounded-lg border border-amber-300 bg-amber-500/10 p-3 dark:border-amber-500/40"
+              >
+                <div className="flex items-start gap-3">
+                  <FaExclamationTriangle className="mt-1 text-amber-500" />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{alert.message}</p>
+                    <p className="mt-1 text-xs text-slate-500">{formatDateTime(alert.time)}</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-lg bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">
+              All protection checks are normal.
+            </p>
+          )}
+        </div>
+
+        {historicalAlerts.length ? (
+          <div className="space-y-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Recent history</p>
+            {historicalAlerts.slice(0, 10).map((alert) => (
             <div
               key={alert.id}
               className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"
@@ -37,12 +66,12 @@ function AlertsPanel({ alerts, onAcknowledge }) {
                 )}
               </div>
             </div>
-          ))
-        ) : (
-          <p className="rounded-lg bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">
-            No alerts recorded.
-          </p>
-        )}
+            ))}
+          </div>
+        ) : null}
+        {!activeAlerts.length && !historicalAlerts.length ? (
+          <p className="text-xs text-slate-500">No historical alerts recorded.</p>
+        ) : null}
       </div>
     </div>
   );
