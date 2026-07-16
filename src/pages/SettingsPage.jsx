@@ -7,6 +7,7 @@ function SettingsPage() {
   const { settings, saveSettings } = useFirebaseData();
   const [form, setForm] = useState(settings);
   const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setForm(settings);
@@ -14,15 +15,24 @@ function SettingsPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    await saveSettings({
-      voltageLimit: Number(form.voltageLimit),
-      currentLimit: Number(form.currentLimit),
-      powerLimit: Number(form.powerLimit),
-      costPerKWh: Number(form.costPerKWh),
-      wifiSsid: form.wifiSsid || '',
-      wifiPassword: form.wifiPassword || '',
-    });
-    setMessage('Settings saved to Firebase.');
+    setSaving(true);
+    setMessage('');
+
+    try {
+      await saveSettings({
+        voltageLimit: Number(form.voltageLimit),
+        currentLimit: Number(form.currentLimit),
+        powerLimit: Number(form.powerLimit),
+        costPerKWh: Number(form.costPerKWh),
+        wifiSsid: form.wifiSsid || '',
+        wifiPassword: form.wifiPassword || '',
+      });
+      setMessage('Settings saved to Firebase.');
+    } catch (error) {
+      setMessage(error?.message || 'Unable to save settings to Firebase.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleChange = (field) => (event) => {
@@ -73,8 +83,8 @@ function SettingsPage() {
         </div>
         {message ? <p className="mt-4 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-600">{message}</p> : null}
         <div className="mt-5">
-          <button className="btn-primary">
-            <FaSave /> Save settings
+          <button className="btn-primary" disabled={saving}>
+            <FaSave /> {saving ? 'Saving...' : 'Save settings'}
           </button>
         </div>
       </form>

@@ -52,4 +52,5 @@ export const paths = {
   settings: 'settings',
   alerts: 'alerts',
   history: 'logs',
+  wifiConfig: 'config',
 };

@@ -46,6 +46,8 @@ const defaultSettings = {
   wifiPassword: '',
 };
 
+const numericSettingKeys = ['voltageLimit', 'currentLimit', 'powerLimit', 'costPerKWh'];
+
 function reportMessage(error, fallback = 'Firebase operation failed.') {
   return error?.message || fallback;
 }
@@ -99,6 +101,22 @@ function normalizeSensorData(value = {}) {
     energy,
     cost: toNumber(value.cost, energy * costPerKWh),
     timestamp: value.timestamp || value.time || new Date().toISOString(),
+  };
+}
+
+function normalizeSettings(value = {}) {
+  return {
+    voltageLimit: toNumber(value.voltageLimit, defaultSettings.voltageLimit),
+    currentLimit: toNumber(value.currentLimit, defaultSettings.currentLimit),
+    powerLimit: toNumber(value.powerLimit, defaultSettings.powerLimit),
+    costPerKWh: toNumber(value.costPerKWh, defaultSettings.costPerKWh),
+  };
+}
+
+function normalizeWifiConfig(value = {}) {
+  return {
+    wifiSsid: value.wifiSsid ?? value.wifi_ssid ?? '',
+    wifiPassword: value.wifiPassword ?? value.wifi_password ?? '',
   };
 }
 
@@ -163,18 +181,11 @@ export function useFirebaseData() {
   const [deviceControl, setDeviceControl] = useState(defaultDeviceControl);
   const [deviceStatus, setDeviceStatus] = useState(defaultDeviceStatus);
   const [settings, setSettings] = useState(defaultSettings);
-  const [alerts, setAlerts] = useState([]);
   const [liveHistory, setLiveHistory] = useState([]);
   const [persistedHistory, setPersistedHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const lastAlertKeyRef = useRef('');
   const lastHistoryKeyRef = useRef('');
-  const loadedPathsRef = useRef({
-    sensorData: false,
-    deviceStatus: false,
-    settings: false,
-  });
 
   useEffect(() => {
     if (!database) {
@@ -188,7 +199,6 @@ export function useFirebaseData() {
         ref(database, paths.sensorData),
         (snapshot) => {
           if (!snapshot.exists()) {
-            loadedPathsRef.current.sensorData = true;
             setLoading(false);
             return;
           }
@@ -196,10 +206,9 @@ export function useFirebaseData() {
           const nextSensorData = normalizeSensorData(snapshot.val() || {});
           const historyKey = historyKeyFromSensor(nextSensorData);
 
-          loadedPathsRef.current.sensorData = true;
           setSensorData((current) => (shallowEqual(current, nextSensorData) ? current : nextSensorData));
           setLiveHistory((current) => {
-            if (current.at(-1)?.timestamp === nextSensorData.timestamp) {
+            if (current[current.length - 1]?.timestamp === nextSensorData.timestamp) {
               return current;
             }
 
@@ -239,7 +248,6 @@ export function useFirebaseData() {
         ref(database, paths.deviceStatus),
         (snapshot) => {
           const nextDeviceStatus = { ...defaultDeviceStatus, ...normalizeDeviceStatus(snapshot.val() || {}) };
-          loadedPathsRef.current.deviceStatus = true;
           setDeviceStatus((current) => (shallowEqual(current, nextDeviceStatus) ? current : nextDeviceStatus));
         },
         (listenerError) => setError(reportMessage(listenerError, 'Unable to read device status data.')),
@@ -248,23 +256,29 @@ export function useFirebaseData() {
         ref(database, paths.settings),
         (snapshot) => {
           if (!snapshot.exists()) {
-            set(ref(database, paths.settings), defaultSettings).catch((writeError) => {
+            set(ref(database, paths.settings), normalizeSettings(defaultSettings)).catch((writeError) => {
               setError(reportMessage(writeError, 'Unable to create default settings.'));
             });
           }
 
-          const nextSettings = { ...defaultSettings, ...(snapshot.val() || {}) };
-          loadedPathsRef.current.settings = true;
-          setSettings((current) => (shallowEqual(current, nextSettings) ? current : nextSettings));
+          const nextSettings = normalizeSettings(snapshot.val() || defaultSettings);
+          setSettings((current) => {
+            const merged = { ...current, ...nextSettings };
+            return shallowEqual(current, merged) ? current : merged;
+          });
         },
         (listenerError) => setError(reportMessage(listenerError, 'Unable to read settings data.')),
       ),
       onValue(
-        ref(database, paths.alerts),
+        ref(database, paths.wifiConfig),
         (snapshot) => {
-          setAlerts(normalizeObjectList(snapshot.val()).slice(0, 50));
+          const nextWifiConfig = normalizeWifiConfig(snapshot.val() || {});
+          setSettings((current) => {
+            const merged = { ...current, ...nextWifiConfig };
+            return shallowEqual(current, merged) ? current : merged;
+          });
         },
-        (listenerError) => setError(reportMessage(listenerError, 'Unable to read alerts.')),
+        (listenerError) => setError(reportMessage(listenerError, 'Unable to read Wi-Fi config.')),
       ),
       onValue(
         ref(database, paths.history),
@@ -280,45 +294,6 @@ export function useFirebaseData() {
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, []);
-
-  const addAlert = useCallback(async (message, severity = 'warning') => {
-    if (!database) {
-      throw new Error('Firebase Realtime Database is not initialized.');
-    }
-
-    const time = new Date().toISOString();
-    const key = `${message}-${severity}-${time.slice(0, 16)}`;
-
-    if (lastAlertKeyRef.current === key) {
-      return;
-    }
-
-    lastAlertKeyRef.current = key;
-    await push(ref(database, paths.alerts), { message, severity, time });
-  }, []);
-
-  useEffect(() => {
-    const readyForProtectionChecks =
-      loadedPathsRef.current.sensorData &&
-      loadedPathsRef.current.deviceStatus &&
-      loadedPathsRef.current.settings;
-
-    if (!readyForProtectionChecks) {
-      return;
-    }
-
-    const checks = [
-      sensorData.voltage > settings.voltageLimit && 'Voltage exceeded safe limit',
-      sensorData.current > settings.currentLimit && 'Current exceeded safe limit',
-      sensorData.power > settings.powerLimit && 'Power exceeded safe limit',
-      !deviceStatus.online && 'Device is offline',
-      !deviceStatus.wifiConnected && 'Wi-Fi disconnected',
-    ].filter(Boolean);
-
-    checks.forEach((message) => {
-      addAlert(message).catch(() => {});
-    });
-  }, [addAlert, deviceStatus.online, deviceStatus.wifiConnected, sensorData, settings]);
 
   const setRelayState = useCallback(
     (relayState) => update(ref(database, paths.deviceControl), { relay: relayState }),
@@ -340,12 +315,20 @@ export function useFirebaseData() {
     [],
   );
 
-  const saveSettings = useCallback((payload) => update(ref(database, paths.settings), payload), []);
+  const saveSettings = useCallback((payload) => {
+    const thresholdPayload = numericSettingKeys.reduce((result, key) => {
+      result[key] = toNumber(payload[key], defaultSettings[key]);
+      return result;
+    }, {});
 
-  const acknowledgeAlert = useCallback(
-    (id) => update(ref(database, `${paths.alerts}/${id}`), { acknowledged: true }),
-    [],
-  );
+    return Promise.all([
+      update(ref(database, paths.settings), thresholdPayload),
+      update(ref(database, paths.wifiConfig), {
+        wifi_ssid: payload.wifiSsid || '',
+        wifi_password: payload.wifiPassword || '',
+      }),
+    ]);
+  }, []);
 
   const seedDemoHistoryPoint = useCallback((payload) => push(ref(database, paths.history), payload), []);
 
@@ -376,7 +359,6 @@ export function useFirebaseData() {
     deviceControl,
     deviceStatus,
     settings,
-    alerts,
     history: persistedHistory.length ? persistedHistory : liveHistory,
     liveHistory,
     persistedHistory,
@@ -387,7 +369,6 @@ export function useFirebaseData() {
     setTimer,
     saveSchedule,
     saveSettings,
-    acknowledgeAlert,
     seedDemoHistoryPoint,
     replaceControl,
   };

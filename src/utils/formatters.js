@@ -13,10 +13,16 @@ export function formatCurrency(value) {
 
 export function formatDateTime(value) {
   if (!value) return 'Waiting for update';
+  const date = new Date(value);
+
+  if (!Number.isFinite(date.getTime())) {
+    return String(value);
+  }
+
   return new Intl.DateTimeFormat('en-NG', {
     dateStyle: 'medium',
     timeStyle: 'medium',
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export function secondsToClock(totalSeconds) {
