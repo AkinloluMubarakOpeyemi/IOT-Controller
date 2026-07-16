@@ -27,7 +27,6 @@ function DashboardPage() {
     deviceControl,
     deviceStatus,
     settings,
-    alerts,
     history,
     costs,
     loading,
@@ -35,13 +34,11 @@ function DashboardPage() {
     setRelayState,
     setTimer,
     saveSchedule,
-    acknowledgeAlert,
   } = data;
 
   const handleRelayChange = useCallback((relayState) => setRelayState(relayState), [setRelayState]);
   const handleTimerChange = useCallback((timer) => setTimer(timer), [setTimer]);
   const handleScheduleSave = useCallback((schedule) => saveSchedule(schedule), [saveSchedule]);
-  const handleAcknowledgeAlert = useCallback((id) => acknowledgeAlert(id), [acknowledgeAlert]);
 
   useEffect(() => {
     const schedule = deviceControl.schedule;
@@ -236,7 +233,7 @@ function DashboardPage() {
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <CostPanel costs={costs} costPerKWh={settings.costPerKWh} />
-        <AlertsPanel alerts={alerts} activeAlerts={activeAlerts} onAcknowledge={handleAcknowledgeAlert} />
+        <AlertsPanel activeAlerts={activeAlerts} />
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-2">

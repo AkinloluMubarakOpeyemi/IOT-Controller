@@ -1,11 +1,7 @@
-import { FaBell, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaBell, FaExclamationTriangle } from 'react-icons/fa';
 import { formatDateTime } from '../../utils/formatters';
 
-function AlertsPanel({ alerts, activeAlerts = [], onAcknowledge }) {
-  const historicalAlerts = alerts.filter(
-    (alert) => !activeAlerts.some((activeAlert) => activeAlert.message === alert.message),
-  );
-
+function AlertsPanel({ activeAlerts = [] }) {
   return (
     <div className="panel p-5">
       <div className="flex items-center justify-between">
@@ -17,7 +13,7 @@ function AlertsPanel({ alerts, activeAlerts = [], onAcknowledge }) {
           <FaBell />
         </div>
       </div>
-      <div className="mt-4 max-h-80 space-y-4 overflow-auto pr-1">
+      <div className="mt-4 max-h-80 space-y-3 overflow-auto pr-1">
         <div className="space-y-3">
           {activeAlerts.length ? (
             activeAlerts.map((alert) => (
@@ -40,38 +36,6 @@ function AlertsPanel({ alerts, activeAlerts = [], onAcknowledge }) {
             </p>
           )}
         </div>
-
-        {historicalAlerts.length ? (
-          <div className="space-y-3 border-t border-slate-200 pt-4 dark:border-slate-800">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Recent history</p>
-            {historicalAlerts.slice(0, 10).map((alert) => (
-            <div
-              key={alert.id}
-              className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex gap-3">
-                  <FaExclamationTriangle className="mt-1 text-amber-500" />
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{alert.message}</p>
-                    <p className="mt-1 text-xs text-slate-500">{formatDateTime(alert.time)}</p>
-                  </div>
-                </div>
-                {alert.acknowledged ? (
-                  <FaCheckCircle className="text-emerald-500" />
-                ) : (
-                  <button className="text-xs font-bold text-cyan-600" onClick={() => onAcknowledge(alert.id)}>
-                    Ack
-                  </button>
-                )}
-              </div>
-            </div>
-            ))}
-          </div>
-        ) : null}
-        {!activeAlerts.length && !historicalAlerts.length ? (
-          <p className="text-xs text-slate-500">No historical alerts recorded.</p>
-        ) : null}
       </div>
     </div>
   );
