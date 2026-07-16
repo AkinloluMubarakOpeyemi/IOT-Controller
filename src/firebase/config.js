@@ -46,10 +46,10 @@ if (missingKeys.length) {
 
 export { app, auth, database, firebaseError };
 export const paths = {
-  sensorData: 'sensorData',
-  deviceControl: 'deviceControl',
-  deviceStatus: 'deviceStatus',
+  sensorData: 'sensor',
+  deviceControl: 'control',
+  deviceStatus: 'system',
   settings: 'settings',
   alerts: 'alerts',
-  history: 'history',
+  history: 'logs',
 };

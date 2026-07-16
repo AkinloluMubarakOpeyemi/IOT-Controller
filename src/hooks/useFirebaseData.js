@@ -21,6 +21,16 @@ const defaultDeviceControl = {
   },
 };
 
+const defaultFirebaseControl = {
+  relay: false,
+  timer: 0,
+  schedule: {
+    enabled: false,
+    onTime: '',
+    offTime: '',
+  },
+};
+
 const defaultDeviceStatus = {
   online: false,
   wifiConnected: false,
@@ -58,7 +68,7 @@ function shallowEqual(left, right) {
 
 function normalizeDeviceControl(value = {}) {
   return {
-    relayState: Boolean(value.relayState),
+    relayState: Boolean(value.relayState ?? value.relay),
     timer: toNumber(value.timer),
     schedule: {
       enabled: Boolean(value.schedule?.enabled),
@@ -88,14 +98,23 @@ function normalizeSensorData(value = {}) {
     power: toNumber(value.power),
     energy,
     cost: toNumber(value.cost, energy * costPerKWh),
-    timestamp: value.timestamp || new Date().toISOString(),
+    timestamp: value.timestamp || value.time || new Date().toISOString(),
   };
 }
 
 function normalizeObjectList(value = {}) {
   return Object.entries(value || {})
     .map(([id, item]) => ({ id, ...item }))
-    .sort((a, b) => new Date(b.time || b.timestamp || 0) - new Date(a.time || a.timestamp || 0));
+    .sort((a, b) => {
+      const left = Date.parse(a.time || a.timestamp);
+      const right = Date.parse(b.time || b.timestamp);
+
+      if (Number.isFinite(left) && Number.isFinite(right)) {
+        return right - left;
+      }
+
+      return toNumber(b.id) - toNumber(a.id);
+    });
 }
 
 function historyKeyFromSensor(sensorData) {
@@ -105,18 +124,37 @@ function historyKeyFromSensor(sensorData) {
 
 function pointFromSensor(sensorData) {
   const timestamp = sensorData.timestamp || new Date().toISOString();
+  const date = new Date(timestamp);
+  const hasValidDate = Number.isFinite(date.getTime());
+
   return {
     timestamp,
-    time: new Date(timestamp).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }),
+    time: hasValidDate
+      ? date.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      : String(timestamp),
     voltage: sensorData.voltage,
     current: sensorData.current,
     power: sensorData.power,
     energy: sensorData.energy,
     cost: sensorData.cost,
+  };
+}
+
+function normalizeDeviceStatus(value = {}) {
+  const lastSeen = value.lastSeen || value.last_updated || null;
+  const statusOnline = value.status ? value.status === 'NORMAL' : Boolean(lastSeen);
+  const wifiOnline = value.status ? value.status === 'NORMAL' : value.wifi_rssi !== undefined;
+
+  return {
+    online: value.online ?? statusOnline,
+    wifiConnected: value.wifiConnected ?? wifiOnline,
+    lastSeen,
+    status: value.status || '',
+    wifiRssi: value.wifi_rssi ?? value.wifiRssi ?? null,
   };
 }
 
@@ -187,7 +225,7 @@ export function useFirebaseData() {
         ref(database, paths.deviceControl),
         (snapshot) => {
           if (!snapshot.exists()) {
-            set(ref(database, paths.deviceControl), defaultDeviceControl).catch((writeError) => {
+            set(ref(database, paths.deviceControl), defaultFirebaseControl).catch((writeError) => {
               setError(reportMessage(writeError, 'Unable to create default device control data.'));
             });
           }
@@ -200,7 +238,7 @@ export function useFirebaseData() {
       onValue(
         ref(database, paths.deviceStatus),
         (snapshot) => {
-          const nextDeviceStatus = { ...defaultDeviceStatus, ...(snapshot.val() || {}) };
+          const nextDeviceStatus = { ...defaultDeviceStatus, ...normalizeDeviceStatus(snapshot.val() || {}) };
           loadedPathsRef.current.deviceStatus = true;
           setDeviceStatus((current) => (shallowEqual(current, nextDeviceStatus) ? current : nextDeviceStatus));
         },
@@ -232,7 +270,7 @@ export function useFirebaseData() {
         ref(database, paths.history),
         (snapshot) => {
           const rows = normalizeObjectList(snapshot.val())
-            .map((item) => pointFromSensor(normalizeSensorData(item)))
+            .map((item) => pointFromSensor(normalizeSensorData({ ...item, timestamp: item.timestamp || item.time || item.id })))
             .reverse();
           setPersistedHistory(rows.slice(-500));
         },
@@ -283,7 +321,7 @@ export function useFirebaseData() {
   }, [addAlert, deviceStatus.online, deviceStatus.wifiConnected, sensorData, settings]);
 
   const setRelayState = useCallback(
-    (relayState) => update(ref(database, paths.deviceControl), { relayState }),
+    (relayState) => update(ref(database, paths.deviceControl), { relay: relayState }),
     [],
   );
 
@@ -311,7 +349,14 @@ export function useFirebaseData() {
 
   const seedDemoHistoryPoint = useCallback((payload) => push(ref(database, paths.history), payload), []);
 
-  const replaceControl = useCallback((payload) => set(ref(database, paths.deviceControl), payload), []);
+  const replaceControl = useCallback(
+    (payload) =>
+      set(ref(database, paths.deviceControl), {
+        ...payload,
+        relay: payload.relay ?? payload.relayState ?? false,
+      }),
+    [],
+  );
 
   const costs = useMemo(() => {
     const costPerKWh = toNumber(settings.costPerKWh, 75);
